@@ -28,7 +28,6 @@ handler.setFormatter(logging.Formatter(log_format))
 
 RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-# ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statues/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
@@ -65,9 +64,10 @@ def get_api_answer(current_timestamp):
                     'Ошибка преобразования из формата json к типам данных'
                     f'python: {error}'
                 )
-        else:
-            logger.error(f'API возвращает код: {response.status_code}.')
-            raise AssertionError
+
+        logger.error(f'API возвращает код: {response.status_code}.')
+        raise AssertionError
+
     except Exception as error:
         logger.error(f'Возникла ошибка при запросе к эндпоинту{error}')
         raise AssertionError
