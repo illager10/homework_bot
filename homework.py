@@ -91,7 +91,7 @@ def check_response(response):
         logger.error('Домашние работы ответа API не являются списком')
         raise TypeError
 
-    return response.get('homeworks')
+    return homeworks
 
 
 def parse_status(homework):
@@ -128,7 +128,9 @@ def main():
         logger.error(
             'Нет доступа к переменным окружения или их значения отсутствуют'
         )
-        sys.exit()
+        sys.exit(
+            'Нет доступа к переменным окружения или их значения отсутствуют'
+        )
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
