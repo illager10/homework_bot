@@ -3,6 +3,8 @@ import time
 import telegram
 import requests
 import logging
+import exceptions
+import sys
 
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
@@ -23,7 +25,7 @@ handler = RotatingFileHandler(
 )
 logger.addHandler(handler)
 
-log_format = "%(asctime)s - [%(levelname)s] - %(message)s"
+log_format = "%(asctime)s - [%(levelname)s] - %(funcName)s - %(message)s"
 handler.setFormatter(logging.Formatter(log_format))
 
 RETRY_TIME = 600
@@ -44,7 +46,7 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info('Cообщение отправлено успешно')
     except Exception as error:
-        logger.error(f'Возникла ошибка при отправке сообщения{error}')
+        logger.error('Возникла ошибка при отправке сообщения %s', error)
 
 
 def get_api_answer(current_timestamp):
@@ -52,25 +54,22 @@ def get_api_answer(current_timestamp):
     Делает запрос к единственному эндпоинту API-сервиса.
     В случае успешного запроса должна вернуть ответ API.
     """
+    logger.info('Начат запрос API')
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
         if response.status_code == HTTPStatus.OK:
-            try:
-                return response.json()
-            except Exception as error:
-                logger.error(
-                    'Ошибка преобразования из формата json к типам данных'
-                    f'python: {error}'
-                )
-
-        logger.error(f'API возвращает код: {response.status_code}.')
-        raise AssertionError
+            return response.json()
+        logger.error(
+            'API возвращает код: %s. URL: %s. Headers:%s. Parameters: %s',
+            response.status_code, ENDPOINT, HEADERS, params
+        )
+        raise exceptions.EmptyAPIResponseError
 
     except Exception as error:
-        logger.error(f'Возникла ошибка при запросе к эндпоинту{error}')
-        raise AssertionError
+        logger.error('Возникла ошибка при запросе к эндпоинту %s', error)
+        raise exceptions.EmptyAPIResponseError
 
 
 def check_response(response):
@@ -78,15 +77,17 @@ def check_response(response):
     Проверяет ответ API на корректность.
     Функция должна вернуть список домашних работ.
     """
-    if type(response) is not dict:
+    logger.info('Начало проверки ответа сервера')
+    if not isinstance(response, dict):
         logger.error('Тип данных ответа API не является словарём')
         raise TypeError
 
-    if ('homeworks' not in response) or ('current_date' not in response):
+    if 'homeworks' not in response or 'current_date' not in response:
         logger.error('Ответ API не содержит необходимых ключей')
         raise KeyError
 
-    if type(response.get('homeworks')) is not list:
+    homeworks = response.get('homeworks')
+    if not isinstance(homeworks, list):
         logger.error('Домашние работы ответа API не являются списком')
         raise TypeError
 
@@ -102,7 +103,14 @@ def parse_status(homework):
         logger.error('Информация о домашней работе - пустой список')
         raise ValueError
     homework_name = homework.get('homework_name')
+    if not homework_name:
+        logger.error('Домашняя работа отсутствует %s', homework_name)
+        raise KeyError
+
     homework_status = homework.get('status')
+    if homework_status not in HOMEWORK_STATUSES:
+        logger.error('Вердикт отсутствует или неизвестен %s', homework_status)
+        raise KeyError
 
     verdict = HOMEWORK_STATUSES[homework_status]
 
@@ -120,7 +128,7 @@ def main():
         logger.error(
             'Нет доступа к переменным окружения или их значения отсутствуют'
         )
-        raise ValueError
+        sys.exit()
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     current_timestamp = int(time.time())
